@@ -75,45 +75,34 @@ class Analyzer:
         print('')
         print('min is:', np.min(energies), np.argmin(energies))
 
-    def bulk_analysis(self, valence, verbose=False):
-        if valence == '3+':
-            bulk_energies = self.bulk_analysis_3valence(verbose=verbose)
-        elif valence == '2+':
-            bulk_energies = self.bulk_analysis_2valence(verbose=verbose)
-        elif valence == '4+':
-            bulk_energies = self.bulk_analysis_4valence(verbose=verbose)
-
-        self.bulk_energies = bulk_energies
-        return bulk_energies
-
-    def bulk_analysis_2valence(self):
-        pass
-
-    def bulk_analysis_4valence(self):
-        pass
-
-    def bulk_analysis_3valence(self, verbose):
+    def solution_energy_calc(self, verbose=False):
         bulk_energies = []
-        for imp in self.imp_list:
-            folder_address = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
-            tmp_energy = self.extract_energies_from_STATIS(folder_address)
-            if tmp_energy[-1] > -1e19:
-                bulk_energies.append(tmp_energy[-1])
-                if verbose:
-                    print(tmp_energy[-1], ' ', folder_address)
-            else:
-                bulk_energies.append(-1)
-                if verbose:
-                    print('convergence has not been achieved at ', folder_address)
-        return bulk_energies
+        if verbose:
+            for imp in self.imp_list:
+                file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
+                tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                if tmp_energy > -1e19:
+                    bulk_energies.append(tmp_energy)
+                    print(tmp_energy, ' ', file_path)
+                else:
+                    bulk_energies.append(-1)
+                    print('convergence has not been achieved at ', file_path)
+        else:
+            for imp in self.imp_list:
+                file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
+                tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                if tmp_energy > -1e19:
+                    bulk_energies.append(tmp_energy)
+                else:
+                    bulk_energies.append(-1)
 
-    def desolution_energy_calc(self, valence):
-        self.bulk_analysis(valence=valence)
-        desol_energies = []
-        for bulk_en in self.bulk_energies:
-            desol_energies.append(bulk_en - self.clear_without)
-        self.solution_energies = desol_energies
-        return desol_energies
+        sol_energies = []
+
+        for bulk_en in bulk_energies:
+            sol_energies.append(bulk_en - self.clear_without)
+
+        self.solution_energies = sol_energies
+        return sol_energies
 
     def segr_analysis_with_coverage(self, coverage_atoms, copies_range, verbose=False):
 
@@ -152,7 +141,7 @@ class Analyzer:
 
         self.energy_table = energies
 
-        delta_H_bulk = self.desolution_energy_calc(valence='3+')
+        delta_H_bulk = self.solution_energy_calc()
 
         delta_H_seg = []
         for imp, bulk_en in zip(self.imp_list, delta_H_bulk):
@@ -295,7 +284,7 @@ class Analyzer:
 
         return options.get(func_type, lambda: None)(self.delta_H_seg)
 
-    def cluster_Vo_Al_imp_calc(self, deleted_O):
+    def cluster_Vo_Al_imp_calc(self, deleted_O, verbose=False):
         energy = []
         for imp in self.imp_list:
             energy_for_each_O = []
@@ -307,5 +296,19 @@ class Analyzer:
                     en = self.extract_energies_from_STATIS(filename)
                     tmp_energy.append(en[-1])
                 energy_for_each_O.append(np.min(tmp_energy))
+                if verbose:
+                    print(f'{imp} {O}: ', np.argmin(tmp_energy))
             energy.append(energy_for_each_O)
         return energy
+
+    def segr_en_from_radius(self):
+        delta_H_seg = []
+
+        delta_H_bulk = self.solution_energy_calc()
+
+        for imp, bulk_en in zip(self.imp_list, delta_H_bulk):
+            file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/{imp}_1/STATIS'
+            surf_en = self.extract_energies_from_STATIS(file_path)[-1]
+            delta_H_seg.append(surf_en - self.clear_with - bulk_en)
+
+        return delta_H_seg
