@@ -186,8 +186,8 @@ class Creator:
         if zero is False:
             OUTPUT.write('optim energy      0.1\n\n')
         else:
-            OUTPUT.write('zero')
-            OUTPUT.write('ensemble nvt hoover   0.1')
+            OUTPUT.write('zero\n')
+            OUTPUT.write('ensemble nvt hoover   0.1\n\n')
 
         OUTPUT.write('timestep         0.0010\n')
         OUTPUT.write(f'cutoff           {cutoff}\n')
