@@ -7,12 +7,13 @@ from scipy.optimize import minimize
 
 
 class Analyzer:
-    def __init__(self, imp_list: list, surf_index: str, clear_without_path=None, clear_with_path=None):
+    def __init__(self, imp_list: list, surf_index: str, solution_energy_method, clear_without_path=None, clear_with_path=None):
         if clear_without_path is None:
             clear_without_path = f'../../MD_Al2O3/{surf_index}/Pristine_without_surf/STATIS'
         if clear_with_path is None:
             clear_with_path = f'../../MD_Al2O3/{surf_index}/Pristine_with_surf/STATIS'
         self.imp_list = imp_list
+        self.solution_energy_method = solution_energy_method
         self.clear_without = Analyzer.extract_energies_from_STATIS(clear_without_path)[-1]
         self.clear_with = Analyzer.extract_energies_from_STATIS(clear_with_path)[-1]
         self.surf_index = surf_index
@@ -76,33 +77,69 @@ class Analyzer:
         print('min is:', np.min(energies), np.argmin(energies))
 
     def solution_energy_calc(self, verbose=False):
-        bulk_energies = []
-        if verbose:
-            for imp in self.imp_list:
-                file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
-                tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
-                if tmp_energy > -1e19:
-                    bulk_energies.append(tmp_energy)
-                    print(tmp_energy, ' ', file_path)
-                else:
-                    bulk_energies.append(-1)
-                    print('convergence has not been achieved at ', file_path)
-        else:
-            for imp in self.imp_list:
-                file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
-                tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
-                if tmp_energy > -1e19:
-                    bulk_energies.append(tmp_energy)
-                else:
-                    bulk_energies.append(-1)
 
-        sol_energies = []
+        def solution_energy_bulk_phase(verbose):
+            bulk_energies = []
+            if verbose:
+                for imp in self.imp_list:
+                    file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
+                    tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                    if tmp_energy > -1e19:
+                        bulk_energies.append(tmp_energy)
+                        print(tmp_energy, ' ', file_path)
+                    else:
+                        bulk_energies.append(-1)
+                        print('convergence has not been achieved at ', file_path)
+            else:
+                for imp in self.imp_list:
+                    file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}/bulk_{imp}/STATIS'
+                    tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                    if tmp_energy > -1e19:
+                        bulk_energies.append(tmp_energy)
+                    else:
+                        bulk_energies.append(-1)
 
-        for bulk_en in bulk_energies:
-            sol_energies.append(bulk_en - self.clear_without)
+            sol_energies = []
 
-        self.solution_energies = sol_energies
-        return sol_energies
+            for bulk_en in bulk_energies:
+                sol_energies.append(bulk_en - self.clear_without)
+
+            self.solution_energies = sol_energies
+            return sol_energies
+
+        def solution_energy_surf_phase(verbose):
+            bulk_energies = []
+            if verbose:
+                for imp in self.imp_list:
+                    file_path = f'../../MD_Al2O3/{self.surf_index}/bulk_one_imp_with_surf/bulk_{imp}/STATIS'
+                    tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                    if tmp_energy > -1e19:
+                        bulk_energies.append(tmp_energy)
+                        print(tmp_energy, ' ', file_path)
+                    else:
+                        bulk_energies.append(-1)
+                        print('convergence has not been achieved at ', file_path)
+            else:
+                for imp in self.imp_list:
+                    file_path = f'../../MD_Al2O3/{self.surf_index}/bulk_one_imp_with_surf/bulk_{imp}/STATIS'
+                    tmp_energy = self.extract_energies_from_STATIS(file_path)[-1]
+                    if tmp_energy > -1e19:
+                        bulk_energies.append(tmp_energy)
+                    else:
+                        bulk_energies.append(-1)
+
+            sol_energies = []
+
+            for bulk_en in bulk_energies:
+                sol_energies.append(bulk_en - self.clear_with)
+
+            self.solution_energies = sol_energies
+            return sol_energies
+
+        options = {'bulk_method': solution_energy_bulk_phase,
+                   'surf_method': solution_energy_surf_phase}
+
+        return options.get(self.solution_energy_method, lambda: None)(verbose)
 
     def segr_analysis_with_coverage(self, coverage_atoms, copies_range, verbose=False):
 
@@ -130,7 +167,7 @@ class Analyzer:
             for name, cov in zip(filename, coverage_atoms[1::]):
                 tmp = []
                 for n in name:
-                    tmp_energy = Analyzer.extract_energies_from_STATIS(n)
+                    tmp_energy = self.extract_energies_from_STATIS(n)
                     if np.abs(tmp_energy[-1]) < 1e6:
                         tmp.append(tmp_energy[-1])
                 if len(tmp) == 0:
@@ -141,15 +178,15 @@ class Analyzer:
 
         self.energy_table = energies
 
-        delta_H_bulk = self.solution_energy_calc()
+        solution_energy = self.solution_energy_calc()
 
         delta_H_seg = []
-        for imp, bulk_en in zip(self.imp_list, delta_H_bulk):
+        for imp, sol_en in zip(self.imp_list, solution_energy):
             delta_H_seg_tmp = []
             for cov in coverage_atoms:
-                delta_H_seg_tmp.append(1 / cov * (energies.at[imp, cov] - self.clear_with - cov * float(bulk_en)))
+                delta_H_seg_tmp.append(1 / cov * (energies.at[imp, cov] - self.clear_with - cov * sol_en))
                 if verbose:
-                    print(imp, '  ', cov, '  ', delta_H_seg[-1])
+                    print(imp, '  ', cov, '  ', delta_H_seg_tmp[-1])
             if verbose:
                 print('')
             delta_H_seg.append(delta_H_seg_tmp)
@@ -292,8 +329,8 @@ class Analyzer:
                 tmp_energy = []
                 list_dir = os.listdir(f'../../MD_Al2O3/{self.surf_index}/2{imp}_Vo/{O}')
                 for folder in list_dir:
-                    filename = f'../../MD_Al2O3/{self.surf_index}/2{imp}_Vo/{O}/{folder}/STATIS'
-                    en = self.extract_energies_from_STATIS(filename)
+                    file_path = f'../../MD_Al2O3/{self.surf_index}/2{imp}_Vo/{O}/{folder}/STATIS'
+                    en = self.extract_energies_from_STATIS(file_path)
                     tmp_energy.append(en[-1])
                 energy_for_each_O.append(np.min(tmp_energy))
                 if verbose:
@@ -312,3 +349,18 @@ class Analyzer:
             delta_H_seg.append(surf_en - self.clear_with - bulk_en)
 
         return delta_H_seg
+
+    def calc_depth(self, Al_right_order):
+        energy = []
+        solution_energy = self.solution_energy_calc()
+
+        for imp, sol_en in zip(self.imp_list, solution_energy):
+            energy_for_each_imp = []
+            for Al in Al_right_order:
+                file_path = f'../../MD_Al2O3/{self.surf_index}/{imp}_depth/{Al}/STATIS'
+                energy_for_each_imp.append(self.extract_energies_from_STATIS(file_path)[-1] - self.clear_with - sol_en)
+            # energy_for_each_imp = np.array(energy_for_each_imp)
+            # energy_for_each_imp = energy_for_each_imp - energy_for_each_imp[-1]
+            energy.append(energy_for_each_imp)
+
+        return energy

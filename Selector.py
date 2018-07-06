@@ -86,8 +86,24 @@ class Selector:
             list_of_indices = [i for i, x in enumerate(is_surf) if x == 1]
             return [numbers[i] for i in list_of_indices]
 
+        def select_surf_atoms_001(tol):
+
+            def surf_equation(x, y, z, tol):
+                if z > 25:
+                    return 1
+                else:
+                    return 0
+
+            x, y, z, names, numbers = self.CONFIG_extract(self.config_path)
+            is_surf = []
+            for x_, y_, z_ in zip(x, y, z):
+                is_surf.append(surf_equation(x_, y_, z_, tol))
+            list_of_indices = [i for i, x in enumerate(is_surf) if x == 1]
+            return [numbers[i] for i in list_of_indices]
+
         options = {'012': select_surf_atoms_012,
-                   '113': select_surf_atoms_113}
+                   '113': select_surf_atoms_113,
+                   '001': select_surf_atoms_001}
 
         return options.get(self.surf_index, lambda: None)(tol)
 
